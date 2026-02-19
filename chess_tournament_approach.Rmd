@@ -1,0 +1,76 @@
+---
+title: "Project 1: Chess Tournament Data – Planned Approach"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Overview
+
+This project involves transforming a semi-structured text file containing chess tournament results into a clean, analysis-ready CSV file. The final output will contain one row per player with five fields: Player Name, State, Total Points, Pre-Tournament Rating, and Average Pre-Rating of Opponents. This document outlines my planned approach and the data challenges I expect to encounter along the journey.
+
+---
+
+## My Planned Approach
+
+### Step 1 is Understanding the Raw Data Structure
+
+Before writing a line of code, I'll manually examine the text file to understand its layout. I can see the file uses the same width throughout and just repeats the block format - every player has exactly two rows, separated by dashed divider lines. Recognizing this pattern is the foundation of everything else because if I get this wrong the whole pipeline breaks.
+
+### Step 2 – Read the File into R
+
+I'll use `readLines()` to pull the entire file in as a character vector, where each element is one line of text. This gives me  control before any actual parsing happens. I'll avoid read.csv or similar functions at this stage because the data isn't tabular yet.
+
+### Step 3 – Filter Out Noise
+
+The file contains header rows, column label rows, and repeated dashed separator lines, like this: `----...----` that carry no data. I'll use pattern matching to remove these, isolating only the meaningful data lines. This will leave me with a clean set of alternating "row 1" and "row 2" blocks for each player.
+
+### Step 4 – Extract Fields Using Regular Expressions (regex)
+
+This is the core of the project. I'll use `stringr` functions like `str_extract()` with regex patterns to pull the information I need out like:
+
+- **Player name** from row 1 (fixed character positions or a pattern match)
+- **State** from row 2 (the two-letter state/province abbreviation)
+- **Total points** from row 1 (a decimal number like `6.0`)
+- **Pre-rating** from row 2 (the number after `R:` and before `->`)
+- **Opponent IDs** from row 1 (the numeric codes after W/L/D results in each round column)
+
+### Step 5 – Calculate Average Opponent Pre-Rating
+
+Once I have each player's pre-rating stored in a lookup table (keyed by player number), I can loop through each player's list of opponent IDs, look up each opponent's pre-rating, and figure out the mean. I'll need to handle byes and unplayed rounds carefully, only actual games with a rated opponent should be included in the average.
+
+### Step 6 – Assemble and Export
+
+I'll combine all extracted fields into a single data frame and write it out with `write.csv()`. The result should be clean enough to import directly into a SQL database.
+
+---
+
+## Anticipated Data Challenges
+
+**The two-row-per-player structure is a big hurdle.** Most R data-reading tools assume one row = one observation. Here, each player's information is split across two lines, so I'll need to make sure to pair them up by index before I can extract anything meaningful.
+
+**Regex precision matters a lot.** The pre-rating field sits inside a string like `15445895 / R: 1794 ->1817`, and I need to grab `1794` specifically — not the post-rating, not the ID number. I'm pretty sure a wrong pattern could silently grab the wrong number, which is the worst kind of bug because the code still runs and produces output that *looks* right, which is my biggest nightmare. 
+
+**Byes and unplayed rounds need special handling.** Not every player plays all seven rounds. When a round has no opponent (a bye or forfeit), there's no opponent ID to look up. I need to make sure my averaging logic skips those entries rather than crashing or producing a wrong average. 
+
+**Player IDs used in round results vs. row numbers.** The round result columns list opponent pair numbers, like: `W  39`, which are the players' positional numbers in the tournament, not row indices in the raw file. I need to make sure my lookup table maps pair number → pre-rating correctly, accounting for the fact that the pair numbers appear explicitly in the data and aren't just implied by order.
+
+**Whitespace inconsistency.** Fixed-width text files often have extra spaces, tabs, or trailing whitespace that can trip up pattern matching. I'll use `str_trim()` liberally to clean extracted values before storing them.
+
+---
+
+## Tools I Plan to Use
+
+- `readLines()` – for initial file ingestion  
+- `stringr` (`str_extract`, `str_trim`, `str_match`) – for all pattern matching  
+- `dplyr` – for data frame manipulation and the opponent average calculation  
+- `write.csv()` – for final output  
+
+---
+
+## What Success Looks Like
+
+The finished CSV will have 64 rows (one per player) and 5 columns. The first row will read:  
+`Gary Hua, ON, 6.0, 1794, 1605`  
+
+If that checks out, the logic generalizes correctly to all other players.
