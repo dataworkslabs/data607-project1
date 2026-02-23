@@ -1,0 +1,101 @@
+---
+title: "Chess Tournament Data"
+author: "Mark Hamer"
+date: "2026-02-22"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+# Read the raw file
+raw_lines <- readLines("tournamentinfo.txt")
+
+# Look at the first 10 lines
+head(raw_lines, 10)
+```
+```{r}
+# Read the raw file
+raw_lines <- readLines("tournamentinfo.txt")
+
+# Look at the first 10 lines
+head(raw_lines, 10)
+```
+
+```{r}
+# Remove dashes lines and header lines - keep only player data
+player_lines <- raw_lines[!grepl("^-", raw_lines)]  # remove dash lines
+player_lines <- player_lines[3:length(player_lines)] # remove the 3 header lines
+head(player_lines, 6)
+```
+```{r}
+# Separate into odd lines (player data) and even lines (state/rating)
+row1 <- player_lines[seq(1, length(player_lines), by = 2)]  # odd lines
+row2 <- player_lines[seq(2, length(player_lines), by = 2)]  # even lines
+
+head(row1, 3)
+head(row2, 3)
+```
+```{r}
+library(stringr)
+
+player_name <- str_trim(str_extract(row1, "(?<=\\|)[^|]+(?=\\|)"))
+head(player_name, 3)
+```
+
+```{r}
+# Total points
+total_pts <- as.numeric(str_trim(str_extract(row1, "(?<=\\|)\\s*\\d+\\.\\d+\\s*(?=\\|)")))
+
+# State
+player_state <- str_trim(str_extract(row2, "^\\s*([A-Z]{2})"))
+
+# Pre-rating (the number after R: and before -> , ignoring any P and numbers after it)
+pre_rating <- as.numeric(str_extract(str_extract(row2, "R:\\s*\\d+"), "\\d+"))
+
+head(total_pts, 3)
+head(player_state, 3)
+head(pre_rating, 3)
+```
+
+```{r}
+# Extract opponent pair numbers from each round (ignore byes, H, U, B, X)
+get_opponents <- function(line) {
+  as.numeric(na.omit(str_extract_all(line, "(?<=[WLDX])\\s*(\\d+)")[[1]] |> 
+  (\(x) str_trim(x))()))
+}
+
+opponents <- lapply(row1, get_opponents)
+opponents[[1]]  # should show Gary Hua's opponents: 39 21 18 14 7 12 4
+```
+
+```{r}
+# Build a lookup table: pair number -> pre-rating
+pair_nums <- as.numeric(str_trim(str_extract(row1, "^\\s*\\d+")))
+rating_lookup <- setNames(pre_rating, pair_nums)
+
+# Calculate average opponent pre-rating for each player
+avg_opp_rating <- sapply(opponents, function(opp_ids) {
+  round(mean(rating_lookup[as.character(opp_ids)], na.rm = TRUE))
+})
+
+avg_opp_rating[1]  # should be 1605 for Gary Hua
+```
+
+```{r}
+# Build the final data frame
+chess_df <- data.frame(
+  Player_Name = player_name,
+  Player_State = player_state,
+  Total_Points = total_pts,
+  Pre_Rating = pre_rating,
+  Avg_Opp_Rating = avg_opp_rating
+)
+
+# Preview it
+head(chess_df)
+
+# Write the CSV
+write.csv(chess_df, "chess_results.csv", row.names = FALSE)
+```
+
